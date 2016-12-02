@@ -1,0 +1,34 @@
+namespace GoPServer.protocol;
+
+table CreateRequest {
+  size: uint;
+  dim: uint;
+  id: byte;
+}
+
+enum PushRequestOp:byte {
+  ADD=0,
+  SET=1
+}
+
+table PushRequest {
+  offsets: [uint];
+  buffer: [double];
+  op:PushRequestOp;
+}
+
+union RequestPayLoad {
+  CreateRequest,
+  PushRequest
+}
+
+table ParameterServerRequest {
+  name:string;     // the parameter block name
+  payload:RequestPayLoad; // the request pay load.
+}
+
+table Requests {
+  req: [ParameterServerRequest];
+}
+
+root_type Requests;

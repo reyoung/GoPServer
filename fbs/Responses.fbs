@@ -1,0 +1,19 @@
+namespace GoPServer.protocol;
+table CreateResponse {
+  error: string;
+}
+
+union ResponsePayLoad {
+  CreateResponse
+}
+
+table ParameterServerResponse {
+  name:string;
+  payload:ResponsePayLoad;
+}
+
+table Responses {
+  res: [ParameterServerResponse];
+}
+
+root_type Responses;

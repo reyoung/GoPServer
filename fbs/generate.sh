@@ -1,5 +1,5 @@
 #!/bin/bash
 rm -rf GoPServer
-flatc ParameterService.fbs  --go
+flatc *.fbs  --go
 cp -r GoPServer/* ../
 rm -rf GoPServer
