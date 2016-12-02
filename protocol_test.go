@@ -5,6 +5,7 @@ import (
 
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/reyoung/GoPServer/protocol"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFlatBuffer(t *testing.T) {
@@ -39,8 +40,9 @@ func TestFlatBuffer(t *testing.T) {
 	req1 := protocol.ParameterServerRequestEnd(builder)
 
 	protocol.RequestsStartReqVector(builder, 2)
-	builder.PrependUOffsetT(req0)
+	// builder.StartVector(flatbuffers.SizeUOffsetT, 2, 0)
 	builder.PrependUOffsetT(req1)
+	builder.PrependUOffsetT(req0)
 	reqs := builder.EndVector(2)
 
 	protocol.RequestsStart(builder)
@@ -49,5 +51,16 @@ func TestFlatBuffer(t *testing.T) {
 	builder.Finish(protocol.RequestsEnd(builder))
 
 	req := protocol.GetRootAsRequests(builder.FinishedBytes(), 0)
-	t.Error(req.ReqLength())
+	assert.Equal(t, req.ReqLength(), 2)
+	r := new(protocol.ParameterServerRequest)
+	reqPayload := new(protocol.CreateRequest)
+	assert.True(t, req.Req(r, 0))
+	assert.Equal(t, "w", string(r.Name()[:]))
+	assert.Equal(t, byte(protocol.RequestPayLoadCreateRequest), r.PayloadType())
+	tmp := new(flatbuffers.Table)
+	assert.True(t, r.Payload(tmp))
+	reqPayload.Init(tmp.Bytes, tmp.Pos)
+
+	assert.Equal(t, uint32(200*200), reqPayload.Size())
+	assert.Equal(t, uint32(200), reqPayload.Dim())
 }
