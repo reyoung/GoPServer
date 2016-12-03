@@ -11,6 +11,7 @@ import "github.com/reyoung/GoPServer/param"
 import "github.com/go-mangos/mangos/protocol/req"
 import "github.com/go-mangos/mangos/protocol/rep"
 import "fmt"
+import "github.com/reyoung/GoPServer/protocol"
 
 // Service for the parameter server.
 type Service struct {
@@ -45,10 +46,10 @@ func New(addr string, sockname string) (*Service, error) {
 	}()
 
 	return &Service{devSocketAddr: devSocketAddr, exposedSocket: sock,
-		devSocket: devSocks}, nil
+		devSocket: devSocks, params: param.New()}, nil
 }
 
-func (serv *Service) echoServe() error {
+func (serv *Service) serveImpl(callback func([]byte) ([]byte, error)) error {
 	sock, err := rep.NewSocket()
 	if err != nil {
 		return err
@@ -62,10 +63,27 @@ func (serv *Service) echoServe() error {
 		if err != nil {
 			return err
 		}
+		msg, err = callback(msg)
+		if err != nil {
+			return err
+		}
 		if err = sock.Send(msg); err != nil {
 			return err
 		}
 	}
+}
+
+func (serv *Service) echoServe() error {
+	return serv.serveImpl(func(msg []byte) ([]byte, error) {
+		return msg, nil
+	})
+}
+
+func (s *Service) Serve() error {
+	return s.serveImpl(func(msg []byte) ([]byte, error) {
+		reqs := protocol.GetRootAsRequests(msg, 0)
+		return s.params.DoJob(reqs), nil
+	})
 }
 
 func (s *Service) Close() {
