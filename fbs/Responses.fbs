@@ -3,8 +3,14 @@ table CreateResponse {
   error: string;
 }
 
+table PullResponse {
+  offsets: [uint];
+  buffer: [double];
+}
+
 union ResponsePayLoad {
-  CreateResponse
+  CreateResponse,
+  PullResponse
 }
 
 table ParameterServerResponse {

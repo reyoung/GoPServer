@@ -17,9 +17,14 @@ table PushRequest {
   op:PushRequestOp;
 }
 
+table PullRequest {
+  offsets: [uint];
+}
+
 union RequestPayLoad {
   CreateRequest,
-  PushRequest
+  PushRequest,
+  PullRequest,
 }
 
 table ParameterServerRequest {
