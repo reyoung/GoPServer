@@ -37,7 +37,7 @@ func New(addr string, sockname string) (*Service, error) {
 	devSocks.AddTransport(inproc.NewTransport())
 	devSocketAddr := fmt.Sprintf("inproc://%s", sockname)
 
-	if err = devSocks.Listen("inproc://a"); err != nil {
+	if err = devSocks.Listen(devSocketAddr); err != nil {
 		return nil, err
 	}
 	go func() {
@@ -54,7 +54,7 @@ func (serv *Service) echoServe() error {
 		return err
 	}
 	sock.AddTransport(inproc.NewTransport())
-	if err = sock.Dial("inproc://a"); err != nil {
+	if err = sock.Dial(serv.devSocketAddr); err != nil {
 		return err
 	}
 	for {
