@@ -6,6 +6,7 @@ table CreateResponse {
 table PullResponse {
   offsets: [uint];
   buffer: [double];
+  id:byte;
 }
 
 union ResponsePayLoad {

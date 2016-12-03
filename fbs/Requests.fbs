@@ -19,6 +19,8 @@ table PushRequest {
 
 table PullRequest {
   offsets: [uint];
+  reqId: byte;
+  resId: byte;
 }
 
 union RequestPayLoad {

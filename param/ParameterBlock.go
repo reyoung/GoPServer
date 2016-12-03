@@ -59,7 +59,11 @@ func (param *Parameters) DoJob(req *protocol.Requests) []byte {
 				buffer: make(map[int8][]float64),
 				job:    make(chan *blockJob, 10),
 			}
-			go block.process() // each parameter block use a goroutine.
+			go func() { // each parameter block use a goroutine.
+				if e := block.process(); e != nil {
+					panic(e)
+				}
+			}()
 			param.params[n] = block
 		}
 		block.job <- &blockJob{
@@ -102,6 +106,7 @@ func createParameterBlockDone(name string, builder *flatbuffers.Builder, lock *s
 func (block *parameterBlock) process() error {
 	table := new(flatbuffers.Table)
 	createReq := new(protocol.CreateRequest)
+	pullReq := new(protocol.PullRequest)
 	for {
 		job, ok := <-block.job
 		if !ok {
@@ -133,7 +138,61 @@ func (block *parameterBlock) process() error {
 			block.buffer[createReq.Id()] = buf
 			// CreateDone, Write Return Value.
 			job.onFinish(createParameterBlockDone(string(job.req.Name()), job.builder, job.lock))
+		case protocol.RequestPayLoadPullRequest:
+			ok = job.req.Payload(table)
+			if !ok {
+				return ErrCannotParsePayload
+			}
+			pullReq.Init(table.Bytes, table.Pos)
+			job.onFinish(block.doPullRequest(string(job.req.Name()), pullReq, job.builder, job.lock))
 		}
 	}
 	return nil
+}
+
+func (block *parameterBlock) doPullRequest(name string,
+	pr *protocol.PullRequest, builder *flatbuffers.Builder, lock *sync.Mutex) flatbuffers.UOffsetT {
+	lock.Lock()
+	defer lock.Unlock()
+	nameOffset := builder.CreateString(name)
+	protocol.PullResponseStartOffsetsVector(builder, pr.OffsetsLength())
+	for i := 0; i < pr.OffsetsLength(); i++ {
+		builder.PrependUint32(pr.Offsets(i))
+	}
+	offsetOffset := builder.EndVector(pr.OffsetsLength())
+
+	// Buffer
+	buf := block.buffer[pr.ReqId()]
+	var bufLen int
+	if pr.OffsetsLength() == 0 {
+		bufLen = len(buf)
+	} else {
+		bufLen = pr.OffsetsLength() * int(block.dim)
+	}
+	protocol.PullResponseStartBufferVector(builder, bufLen)
+	if pr.OffsetsLength() == 0 { // just copy whole buffer reversely
+		for i := len(buf) - 1; i >= 0; i-- {
+			builder.PrependFloat64(buf[i])
+		}
+	} else {
+		for i := pr.OffsetsLength() - 1; i >= 0; i-- {
+			offset := int(pr.Offsets(i))
+			for j := offset + int(block.dim) - 1; j >= offset; j-- {
+				builder.PrependFloat64(buf[j])
+			}
+		}
+	}
+	bufOffset := builder.EndVector(bufLen)
+
+	protocol.PullResponseStart(builder)
+	protocol.PullResponseAddId(builder, pr.ResId())
+	protocol.PullResponseAddOffsets(builder, offsetOffset)
+	protocol.PullResponseAddBuffer(builder, bufOffset)
+	payload := protocol.PullResponseEnd(builder)
+
+	protocol.ParameterServerResponseStart(builder)
+	protocol.ParameterServerRequestAddName(builder, nameOffset)
+	protocol.ParameterServerRequestAddPayloadType(builder, protocol.ResponsePayLoadPullResponse)
+	protocol.ParameterServerResponseAddPayload(builder, payload)
+	return protocol.ParameterServerResponseEnd(builder)
 }
