@@ -35,7 +35,7 @@ func New() *Parameters {
 	}
 }
 
-func (param *Parameters) DoJob(req *protocol.Requests) *flatbuffers.Builder {
+func (param *Parameters) DoJob(req *protocol.Requests) []byte {
 	reqs := make([]*protocol.ParameterServerRequest, req.ReqLength())
 	mtx := &sync.Mutex{}
 	builder := flatbuffers.NewBuilder(0)
@@ -79,8 +79,8 @@ func (param *Parameters) DoJob(req *protocol.Requests) *flatbuffers.Builder {
 
 	protocol.ResponsesStart(builder)
 	protocol.ResponsesAddRes(builder, reses)
-	protocol.ResponsesEnd(builder)
-	return builder
+	builder.Finish(protocol.ResponsesEnd(builder))
+	return builder.FinishedBytes()
 }
 
 func createParameterBlockDone(name string, builder *flatbuffers.Builder, lock *sync.Mutex) flatbuffers.UOffsetT {

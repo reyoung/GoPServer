@@ -1,30 +1,47 @@
 package service
 
 import "testing"
-import nn "github.com/op/go-nanomsg"
+
+import "github.com/go-mangos/mangos/protocol/req"
 import "github.com/stretchr/testify/assert"
+import "sync"
+import "github.com/go-mangos/mangos/transport/tcp"
 
 func TestEcho(t *testing.T) {
-	serv, err := New("tcp://127.0.0.1:9083")
+	addr := "tcp://127.0.0.1:4321"
+	serv, err := New(addr, "test_echo")
 	assert.NoError(t, err)
 	go serv.echoServe()
-	go serv.echoServe()
-
+	// go serv.echoServe()
+	var wg sync.WaitGroup
+	wg.Add(2)
 	testEcho := func(msg []byte, iteration int) {
-		sock, err := nn.NewReqSocket()
-		defer sock.Close()
+		sock, err := req.NewSocket()
+		if err != nil {
+			panic(err)
+		}
+		sock.AddTransport(tcp.NewTransport())
+		err = sock.Dial(addr)
+		if err != nil {
+			panic(err)
+		}
 		for i := 0; i < iteration; i++ {
-			assert.NoError(t, err)
-			_, err = sock.Connect("tcp://127.0.0.1:9083")
-			assert.NoError(t, err)
-			_, err = sock.Send(msg, len(msg))
-			assert.NoError(t, err)
-			buf, err := sock.Recv(0)
-			assert.NoError(t, err)
+			err = sock.Send(msg)
+			if err != nil {
+				panic(err)
+			}
+			buf, err := sock.Recv()
+			if err != nil {
+				panic(err)
+			}
 			assert.Equal(t, msg, buf)
 		}
+		wg.Done()
+		assert.NoError(t, sock.Close())
 	}
 
 	go testEcho([]byte("abc"), 10000)
 	go testEcho([]byte("bcd"), 10000)
+	wg.Wait()
+	serv.Close()
 }

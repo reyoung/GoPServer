@@ -1,36 +1,74 @@
 package service
 
-import nn "github.com/op/go-nanomsg"
+import "github.com/go-mangos/mangos"
+
+import "github.com/go-mangos/mangos/transport/tcp"
+
+import "github.com/go-mangos/mangos/transport/inproc"
+
+import "github.com/reyoung/GoPServer/param"
+
+import "github.com/go-mangos/mangos/protocol/req"
+import "github.com/go-mangos/mangos/protocol/rep"
+import "fmt"
 
 // Service for the parameter server.
 type Service struct {
-	rawSocket *nn.RepSocket
+	params        *param.Parameters
+	devSocketAddr string
+	exposedSocket mangos.Socket
+	devSocket     mangos.Socket
 }
 
 // New parameter server by addr
-func New(addr string) (*Service, error) {
-	sock, err := nn.NewRepSocket()
+func New(addr string, sockname string) (*Service, error) {
+	sock, err := rep.NewSocket()
 	if err != nil {
 		return nil, err
 	}
-	_, err = sock.Bind(addr)
+	sock.AddTransport(tcp.NewTransport())
+	if err = sock.Listen(addr); err != nil {
+		return nil, err
+	}
+	devSocks, err := req.NewSocket()
 	if err != nil {
 		return nil, err
 	}
-	return &Service{
-		rawSocket: sock,
-	}, nil
+	devSocks.AddTransport(inproc.NewTransport())
+	devSocketAddr := fmt.Sprintf("inproc://%s", sockname)
+
+	if err = devSocks.Listen("inproc://a"); err != nil {
+		return nil, err
+	}
+	go func() {
+		mangos.Device(sock, devSocks)
+	}()
+
+	return &Service{devSocketAddr: devSocketAddr, exposedSocket: sock,
+		devSocket: devSocks}, nil
 }
 
 func (serv *Service) echoServe() error {
+	sock, err := rep.NewSocket()
+	if err != nil {
+		return err
+	}
+	sock.AddTransport(inproc.NewTransport())
+	if err = sock.Dial("inproc://a"); err != nil {
+		return err
+	}
 	for {
-		buf, err := serv.rawSocket.Recv(0)
+		msg, err := sock.Recv()
 		if err != nil {
 			return err
 		}
-		_, err = serv.rawSocket.Send(buf, len(buf))
-		if err != nil {
+		if err = sock.Send(msg); err != nil {
 			return err
 		}
 	}
+}
+
+func (s *Service) Close() {
+	s.devSocket.Close()
+	s.exposedSocket.Close()
 }
